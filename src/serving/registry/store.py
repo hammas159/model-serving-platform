@@ -41,14 +41,10 @@ class Registry:
         return sorted(self._versions.get(name, []), key=lambda v: v.version)
 
     def champion(self, name: str) -> ModelVersion | None:
-        return next(
-            (v for v in self._versions.get(name, []) if v.stage is Stage.CHAMPION), None
-        )
+        return next((v for v in self._versions.get(name, []) if v.stage is Stage.CHAMPION), None)
 
     def challenger(self, name: str) -> ModelVersion | None:
-        return next(
-            (v for v in self._versions.get(name, []) if v.stage is Stage.CHALLENGER), None
-        )
+        return next((v for v in self._versions.get(name, []) if v.stage is Stage.CHALLENGER), None)
 
     def shadows(self, name: str) -> list[ModelVersion]:
         return [v for v in self._versions.get(name, []) if v.stage is Stage.SHADOW]
@@ -68,10 +64,15 @@ class Registry:
         incoming.stage = Stage.CHAMPION
         incoming.traffic = 1.0
 
-        self.history.append({
-            "action": "promote", "model": name, "to": version,
-            "from": outgoing.version if outgoing else None, "reason": reason,
-        })
+        self.history.append(
+            {
+                "action": "promote",
+                "model": name,
+                "to": version,
+                "from": outgoing.version if outgoing else None,
+                "reason": reason,
+            }
+        )
         return incoming
 
     def start_canary(self, name: str, version: int, traffic: float = 0.05) -> ModelVersion:
@@ -96,8 +97,9 @@ class Registry:
         mv = self.get(name, version)
         mv.stage = Stage.CHALLENGER
         mv.traffic = traffic
-        self.history.append({"action": "canary", "model": name, "version": version,
-                             "traffic": traffic})
+        self.history.append(
+            {"action": "canary", "model": name, "version": version, "traffic": traffic}
+        )
         return mv
 
     def set_canary_traffic(self, name: str, traffic: float) -> ModelVersion:
@@ -121,8 +123,9 @@ class Registry:
             return None
         challenger.stage = Stage.ARCHIVED
         challenger.traffic = 0.0
-        self.history.append({"action": "rollback", "model": name,
-                             "version": challenger.version, "reason": reason})
+        self.history.append(
+            {"action": "rollback", "model": name, "version": challenger.version, "reason": reason}
+        )
         return challenger
 
     def add_shadow(self, name: str, version: int) -> ModelVersion:

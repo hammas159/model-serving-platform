@@ -67,8 +67,13 @@ class ServingPlatform:
         self.monitor.record(serving.key, latency, error=bool(error))
 
         prediction = Prediction(
-            model=name, version=serving.version, output=output, latency_ms=round(latency, 3),
-            stage=stage, request_id=request_key, error=error,
+            model=name,
+            version=serving.version,
+            output=output,
+            latency_ms=round(latency, 3),
+            stage=stage,
+            request_id=request_key,
+            error=error,
         )
 
         # Shadows score the same request. Never returned, never able to fail the call.
@@ -82,7 +87,9 @@ class ServingPlatform:
                     s_out, s_latency, s_error = None, 0.0, str(exc)
                 self.monitor.record(shadow.key, s_latency, error=bool(s_error))
                 recorded[shadow.key] = {
-                    "output": s_out, "latency_ms": round(s_latency, 3), "error": s_error,
+                    "output": s_out,
+                    "latency_ms": round(s_latency, 3),
+                    "error": s_error,
                     "agrees_with_champion": s_out == output and not s_error and not error,
                 }
             prediction.shadow = recorded

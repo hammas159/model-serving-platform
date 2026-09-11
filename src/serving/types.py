@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 
-class Stage(str, enum.Enum):
+class Stage(enum.StrEnum):
     """Where a model version sits in its lifecycle.
 
     CHAMPION is the version serving production traffic. CHALLENGER is competing for

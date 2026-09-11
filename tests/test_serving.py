@@ -133,7 +133,7 @@ class TestTrafficSplit:
         """A user unlucky in one experiment should not be unlucky in every one."""
         a = [in_canary(f"u{i}", 0.5, salt="exp-a") for i in range(2000)]
         b = [in_canary(f"u{i}", 0.5, salt="exp-b") for i in range(2000)]
-        agreement = sum(x == y for x, y in zip(a, b)) / len(a)
+        agreement = sum(x == y for x, y in zip(a, b, strict=False)) / len(a)
         assert 0.45 < agreement < 0.55
 
     def test_bucket_is_in_range(self):
@@ -268,8 +268,9 @@ class TestAutoRollback:
         assert not p.rollbacks
 
     def test_auto_rollback_can_be_disabled(self):
-        p = platform(auto_rollback=False,
-                     monitor=SLOMonitor(slo=SLO(max_error_rate=0.05, min_samples=20)))
+        p = platform(
+            auto_rollback=False, monitor=SLOMonitor(slo=SLO(max_error_rate=0.05, min_samples=20))
+        )
         p.load("risk", 2, broken)
         p.registry.start_canary("risk", 2, 0.9)
         for i in range(200):
