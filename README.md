@@ -129,3 +129,54 @@ tests/                 fake models that fail and stall on demand
 ## License
 
 MIT
+
+---
+
+## Run it yourself
+
+```bash
+git clone https://github.com/hammas159/model-serving-platform
+cd model-serving-platform
+
+uv sync --all-groups     # or: pip install -e ".[dev]"
+make test                # 31 tests, no models, no GPU, no training
+```
+
+Models are just callables, so you can wire in anything — sklearn, a torch module, a
+remote endpoint:
+
+```python
+from serving import ServingPlatform
+
+platform = ServingPlatform()
+platform.registry.register("risk", 1); platform.load("risk", 1, champion_model)
+platform.registry.register("risk", 2); platform.load("risk", 2, new_model)
+
+platform.registry.promote("risk", 1)              # v1 serves everything
+platform.registry.start_canary("risk", 2, 0.05)   # 5% to v2, sticky per user
+platform.registry.add_shadow("risk", 3)           # v3 scores, nobody sees it
+
+result = platform.predict("risk", features, request_key=user_id)
+platform.status("risk")     # champion vs challenger, side by side
+platform.rollbacks          # why anything was rolled back
+```
+
+## Problems hit while building this
+
+**Ranking canary assignment randomly looked fine and was not.** A coin flip per request
+means the same user hits the champion, then the challenger, then the champion again
+within one session — an inconsistent experience *and* an A/B result that measures
+nothing. *Fixed* by hashing the request identity, so assignment is sticky and the split
+can be replayed exactly during an investigation. A salt keeps two experiments on the
+same user uncorrelated.
+
+**Promotion could briefly leave two champions, or none.** Demoting the old champion and
+promoting the new one as separate steps is a race that will eventually happen under
+load, and a registry in that state serves whichever version it reaches first. *Fixed* by
+making promotion atomic, with a test asserting exactly one champion after repeated
+promotions.
+
+**The first auto-rollback rule would have rolled back during an outage.** If an upstream
+dependency fails, the challenger breaches its SLO — but so does the champion. Rolling
+back then removes a healthy deployment and fixes nothing, while the real problem
+continues. *Fixed* by checking the champion too, and that shared-outage case is a test.
