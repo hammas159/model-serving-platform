@@ -1,0 +1,131 @@
+# model-serving-platform
+
+[![ci](https://github.com/hammas159/model-serving-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/hammas159/model-serving-platform/actions/workflows/ci.yml)
+![python](https://img.shields.io/badge/python-3.12-blue)
+![license](https://img.shields.io/badge/license-MIT-green)
+
+**Multi-model serving with A/B testing, canary rollout, shadow traffic, per-version
+SLOs and auto-rollback.** No cloud, no Kubernetes — the deployment logic, built and
+tested properly.
+
+---
+
+## What it does
+
+| | |
+|---|---|
+| **Registry** | Versions with lifecycle stages. At most one champion per model — enforced, not documented. |
+| **Canary** | A slice of traffic to a challenger, with sticky assignment. |
+| **Shadow** | A version scores real traffic while its output is discarded. |
+| **SLOs** | Per-version p50/p95/p99 and error rate, compared champion against challenger. |
+| **Auto-rollback** | A breaching canary removes itself. |
+
+## Six decisions worth defending
+
+**Traffic assignment is a hash, not a coin flip.** Random assignment means the same
+user sees the champion and then the challenger within one session — an inconsistent
+experience and an A/B result that measures nothing. Hashing makes assignment sticky
+and reproducible, so a split can be replayed exactly during an investigation. A salt
+keeps two experiments on the same user uncorrelated, because a user who is unlucky in
+one should not be systematically unlucky in every one.
+
+**Promotion is atomic.** The outgoing champion is demoted in the same operation that
+promotes the incoming one. A registry that can briefly have two champions, or none,
+will eventually do exactly that under load.
+
+**A shadow failure cannot reach the caller.** Shadows score the same request, their
+output is recorded and never returned, and their exceptions are contained. If a shadow
+error could surface to a user, nobody would dare shadow anything worth testing.
+
+**No SLO verdict below a sample floor.** One slow request in the first three must not
+roll back a healthy deployment. A canary system that cries wolf gets switched off,
+which is worse than not having one.
+
+**Comparison is relative, not absolute.** A challenger at 3% errors is fine against a
+champion at 4%, and a disaster against a champion at 0.1%. A fixed threshold cannot
+tell those apart.
+
+**A shared outage does not trigger rollback.** If the champion is breaching too, the
+problem is upstream. Rolling back then removes a healthy deployment and fixes nothing.
+This is a test:
+
+```python
+def test_a_shared_outage_does_not_roll_back_the_canary():
+    ...
+    assert p.registry.challenger("risk") is not None
+    assert not p.rollbacks
+```
+
+## Percentiles, not averages
+
+The mean is the one latency statistic that never matters — users live at p95 and p99,
+and you cannot recover a percentile from an average. Percentiles use nearest-rank:
+unambiguous, and correct on small samples where interpolation invents a value no
+request actually had.
+
+## Usage
+
+```python
+platform = ServingPlatform()
+platform.registry.register("risk", 1)
+platform.registry.register("risk", 2)
+platform.load("risk", 1, champion_model)
+platform.load("risk", 2, new_model)
+
+platform.registry.promote("risk", 1)             # v1 serves everything
+platform.registry.start_canary("risk", 2, 0.05)  # 5% to v2
+platform.registry.add_shadow("risk", 3)          # v3 scores, nobody sees it
+
+result = platform.predict("risk", features, request_key=user_id)
+result.version          # 1 or 2, stable for this user
+result.shadow           # v3's output and whether it agreed
+platform.status("risk") # champion vs challenger, side by side
+```
+
+A breaching canary rolls itself back. `platform.rollbacks` records why.
+
+## Tests
+
+**31 tests, no models, no GPU, no training.**
+
+Models are fakes — a function that returns a value, fails, or is slow. Everything worth
+testing here is a *routing and lifecycle* behaviour, not a modelling one, which is why
+the whole platform can be verified in milliseconds.
+
+```bash
+make test
+```
+
+| Covered | |
+|---|---|
+| Registry | champion uniqueness, idempotent promotion, one canary at a time, rollback semantics, audit history |
+| Splitting | stickiness, distribution accuracy, salt decorrelation, boundaries |
+| Serving | routing, missing champion, unloaded model, model failure |
+| Shadow | output discarded, failure contained, agreement reporting |
+| SLO | sample floor, latency breach, error breach, percentiles, relative comparison |
+| Rollback | bad canary rolls back, healthy canary survives, shared outage does not |
+
+## Layout
+
+```
+src/serving/
+  types.py             ModelVersion, Stage, Prediction
+  registry/store.py    lifecycle, promotion, canary, rollback, history
+  routing/split.py     hash-based sticky assignment
+  observe/slo.py       per-version percentiles and the rollback decision
+  server.py            predict: route, score, shadow, measure, maybe roll back
+tests/                 fake models that fail and stall on demand
+```
+
+## Limits
+
+- In-process. Multi-instance deployment needs shared state for the registry and the
+  SLO window — Redis or Postgres is the obvious next step.
+- Rollback is automatic; roll-*forward* promotion is deliberately manual. Promoting on
+  a metric alone is how a model that looks good for an hour reaches everyone.
+- No model loading or serialisation. The platform takes callables; what produces them
+  is the training pipeline's problem.
+
+## License
+
+MIT
