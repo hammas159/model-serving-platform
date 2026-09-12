@@ -1,4 +1,4 @@
-# model-serving-platform
+# model-serving-platform (FastAPI, Pydantic)
 
 [![ci](https://github.com/hammas159/model-serving-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/hammas159/model-serving-platform/actions/workflows/ci.yml)
 ![python](https://img.shields.io/badge/python-3.12-blue)
