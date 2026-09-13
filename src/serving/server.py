@@ -107,8 +107,17 @@ class ServingPlatform:
         # outage degrades both, and rolling back then removes a healthy deployment
         # while fixing nothing.
         champion = self.registry.champion(name)
-        if champion is not None and self.monitor.breached(champion.key) is not None:
-            return
+        if champion is not None:
+            if self.monitor.breached(champion.key) is not None:
+                return
+            # `breached()` is silent below min_samples, so None means either "healthy"
+            # or "no verdict yet" - and treating the second as the first is how an
+            # upstream outage gets misread as a bad canary. The challenger can reach
+            # min_samples first (hash bucketing is not exactly even, and a large canary
+            # share makes it likely), at which point the champion is failing every
+            # request and still has nothing to say about it. Wait for a verdict.
+            if self.monitor.get(champion.key).requests < self.monitor.slo.min_samples:
+                return
         try:
             self.registry.rollback(name, reason=f"SLO breach: {reason}")
         except RegistryError:

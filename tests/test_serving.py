@@ -267,6 +267,26 @@ class TestAutoRollback:
         assert p.registry.challenger("risk") is not None
         assert not p.rollbacks
 
+    def test_a_shared_outage_is_survived_even_when_the_canary_is_judged_first(self):
+        """The same guarantee as above, with request keys that bucket the other way.
+
+        `breached()` is silent below min_samples, so it returns None both for "healthy"
+        and for "no verdict yet". Whether the champion or the challenger crosses
+        min_samples first is decided by the hash of the request keys - with `u{i}` keys
+        the champion gets there first and the outage guard works, which is why the test
+        above passed while this path was broken. With `req-{i}` keys the challenger is
+        judged first, the champion is still silent, and the outage used to be misread
+        as a bad canary.
+        """
+        p = platform(monitor=SLOMonitor(slo=SLO(max_error_rate=0.05, min_samples=20)))
+        p.load("risk", 1, broken)
+        p.load("risk", 2, broken)
+        p.registry.start_canary("risk", 2, 0.5)
+        for i in range(300):
+            p.predict("risk", {}, request_key=f"req-{i}")
+        assert p.registry.challenger("risk") is not None
+        assert not p.rollbacks
+
     def test_auto_rollback_can_be_disabled(self):
         p = platform(
             auto_rollback=False, monitor=SLOMonitor(slo=SLO(max_error_rate=0.05, min_samples=20))

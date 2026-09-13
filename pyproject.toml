@@ -4,11 +4,7 @@ version = "0.1.0"
 description = "Multi-model serving with A/B testing, canary rollout, shadow traffic, SLOs and auto-rollback."
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
-dependencies = [
-    "fastapi>=0.115", "uvicorn[standard]>=0.32",
-    "pydantic>=2.9", "pydantic-settings>=2.6",
-    "rich>=13.9", "typer>=0.15",
-]
+dependencies = []
 
 [dependency-groups]
 dev = ["pytest>=8.3", "ruff>=0.8"]

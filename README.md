@@ -1,4 +1,4 @@
-# model-serving-platform (FastAPI, Pydantic)
+# model-serving-platform (Python, zero core dependencies, optional Streamlit demo)
 
 [![ci](https://github.com/hammas159/model-serving-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/hammas159/model-serving-platform/actions/workflows/ci.yml)
 ![python](https://img.shields.io/badge/python-3.12-blue)
@@ -86,7 +86,7 @@ A breaching canary rolls itself back. `platform.rollbacks` records why.
 
 ## Tests
 
-**31 tests, no models, no GPU, no training.**
+**37 tests (32 core + 5 for the optional Streamlit demo), no models, no GPU, no training.**
 
 Models are fakes — a function that returns a value, fails, or is slow. Everything worth
 testing here is a *routing and lifecycle* behaviour, not a modelling one, which is why
@@ -139,7 +139,7 @@ git clone https://github.com/hammas159/model-serving-platform
 cd model-serving-platform
 
 uv sync --all-groups     # or: pip install -e ".[dev]"
-make test                # 31 tests, no models, no GPU, no training
+make test                # 37 tests, no models, no GPU, no training
 ```
 
 Models are just callables, so you can wire in anything — sklearn, a torch module, a
@@ -161,6 +161,21 @@ platform.status("risk")     # champion vs challenger, side by side
 platform.rollbacks          # why anything was rolled back
 ```
 
+### The demo dashboard (`ui` dependency group)
+
+`pyproject.toml` has declared a `streamlit` + `pandas` `ui` group since the repo's
+first commit; this is the actual demo that group was for. Two tabs: watch canary
+traffic split (and prove assignment is sticky — the same key lands on the same version
+twice), and run the three rollback scenarios side by side. The second tab is the one
+worth clicking: a **bad canary** rolls back, a **shared upstream outage** does not, and
+the difference is the whole argument for the feature. Building it is what surfaced the
+bug below.
+
+```bash
+uv sync --group ui        # or: pip install streamlit pandas
+streamlit run ui/app.py
+```
+
 ## Problems hit while building this
 
 **Ranking canary assignment randomly looked fine and was not.** A coin flip per request
@@ -180,3 +195,31 @@ promotions.
 dependency fails, the challenger breaches its SLO — but so does the champion. Rolling
 back then removes a healthy deployment and fixes nothing, while the real problem
 continues. *Fixed* by checking the champion too, and that shared-outage case is a test.
+
+**…and that fix was still wrong, which the test could not see.** Building the dashboard
+above and clicking "upstream outage" rolled the canary back anyway. The cause:
+
+```python
+def breached(self, key):
+    """Return the reason for a breach, or None. Silent below min_samples."""
+```
+
+`None` means **either** "healthy" **or** "no verdict yet", and the outage guard read the
+second as the first. The challenger can cross `min_samples` first — bucketing is a hash,
+not an even split — and at that moment the champion is failing every request while still
+having nothing to say about it, so the outage looks exactly like a bad canary:
+
+```
+rollback fired at request 31
+  champion   v1  requests=12  breached=None          <- silent, not healthy
+  challenger v2  requests=20  breached=error rate 100.00%
+```
+
+**The existing test passed only because of how its request keys hashed.** At 50% canary,
+`u{i}` keys put the champion over `min_samples` first (request 29 vs 57) and the guard
+worked; `req-{i}` keys put the challenger first (31 vs 46) and it did not. The assertion
+was right and the fixture happened to avoid the failing path.
+
+*Fixed* by deferring the rollback decision until the champion has a verdict at all, with
+a second test using the key prefix that buckets the other way — verified to fail against
+the old logic, so the ordering cannot quietly come back.
