@@ -1,16 +1,45 @@
-# model-serving-platform (Python, zero core dependencies, optional Streamlit demo)
+<h1 align="center">model-serving-platform</h1>
+<p align="center"><i>The deployment logic - canaries, SLOs and auto-rollback - built and tested properly</i></p>
 
-[![ci](https://github.com/hammas159/model-serving-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/hammas159/model-serving-platform/actions/workflows/ci.yml)
-![python](https://img.shields.io/badge/python-3.12-blue)
-![license](https://img.shields.io/badge/license-MIT-green)
+<p align="center">
+  <a href="#what-it-does">What it does</a> &middot;
+  <a href="#six-decisions-worth-defending">Six decisions</a> &middot;
+  <a href="#percentiles-not-averages">Percentiles</a> &middot;
+  <a href="#usage">Usage</a> &middot;
+  <a href="#limits">Limits</a> &middot;
+  <a href="#problems-hit-while-building-this">Problems hit</a>
+</p>
 
-**Multi-model serving with A/B testing, canary rollout, shadow traffic, per-version
-SLOs and auto-rollback.** No cloud, no Kubernetes — the deployment logic, built and
-tested properly.
+<p align="center">
+  <a href="https://github.com/hammas159/model-serving-platform/actions/workflows/ci.yml"><img src="https://github.com/hammas159/model-serving-platform/actions/workflows/ci.yml/badge.svg" alt="ci"></a>
+  <img src="https://img.shields.io/badge/python-3.11%2B-blue" alt="python">
+  <img src="https://img.shields.io/badge/core%20deps-zero-success" alt="deps">
+  <img src="https://img.shields.io/badge/no%20cloud-no%20Kubernetes-informational" alt="infra">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="license"></a>
+</p>
 
 ---
 
 ## What it does
+
+```mermaid
+flowchart LR
+    D["new model version"] --> C["canary<br/>small traffic share"]
+    C --> M["measure against SLO<br/>p95, p99, error rate"]
+    M --> E{"error budget<br/>breached?"}
+    E -->|"yes"| RB["auto-rollback"]
+    E -->|"no"| S{"enough samples<br/>to decide?"}
+    S -->|"not yet"| C
+    S -->|"yes"| P["promote"]
+
+    style RB fill:#dc2626,color:#fff
+    style P fill:#16a34a,color:#fff
+```
+
+The "not yet" branch is the one most implementations miss: **a healthy verdict and no
+verdict yet are not the same thing**, and promoting on the second is how a bad version
+reaches everyone.
+
 
 | | |
 |---|---|
@@ -125,6 +154,10 @@ tests/                 fake models that fail and stall on demand
   a metric alone is how a model that looks good for an hour reaches everyone.
 - No model loading or serialisation. The platform takes callables; what produces them
   is the training pipeline's problem.
+
+## Keywords
+
+model serving &middot; MLOps &middot; canary deployment &middot; progressive rollout &middot; auto-rollback &middot; SLO &middot; error budget &middot; p95 &middot; p99 &middot; percentiles &middot; A/B testing &middot; champion challenger &middot; shadow deployment &middot; model registry &middot; production ML &middot; zero dependencies
 
 ## License
 
