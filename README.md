@@ -194,20 +194,20 @@ platform.status("risk")     # champion vs challenger, side by side
 platform.rollbacks          # why anything was rolled back
 ```
 
-### The demo dashboard (`ui` dependency group)
+### Input / Output
 
-`pyproject.toml` has declared a `streamlit` + `pandas` `ui` group since the repo's
-first commit; this is the actual demo that group was for. Two tabs: watch canary
-traffic split (and prove assignment is sticky — the same key lands on the same version
-twice), and run the three rollback scenarios side by side. The second tab is the one
-worth clicking: a **bad canary** rolls back, a **shared upstream outage** does not, and
-the difference is the whole argument for the feature. Building it is what surfaced the
-bug below.
+![input](docs/images/input.png)
 
-```bash
-uv sync --group ui        # or: pip install streamlit pandas
-streamlit run ui/app.py
-```
+`python demo.py`
+
+![output](docs/images/output.png)
+
+The challenger's numbers are identical in both scenarios: 100% error rate, far past the
+2% SLO. The decisions are opposite.
+
+Rolling back scenario B would archive the challenger, restore a champion that is failing
+every request just as hard, and report the incident as handled. The rollback that does
+not happen is the harder one to get right, and the one nothing would have alerted on.
 
 ## Problems hit while building this
 
