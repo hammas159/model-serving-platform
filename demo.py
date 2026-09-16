@@ -9,6 +9,8 @@ deployment that is no worse than what replaces it.
 
 No network, no models -- the "models" are functions that fail on demand.
 """
+
+import contextlib
 import sys
 
 sys.path.insert(0, "src")
@@ -43,7 +45,7 @@ SCENARIOS = [
 
 print("INPUT")
 print("   champion v1 and challenger v2, 50/50 canary split, SLO max_error_rate=2%")
-for label, champ, chal in SCENARIOS:
+for label, _champ, _chal in SCENARIOS:
     print(f"   scenario {label}")
 print("   2000 requests sent through each")
 print()
@@ -52,10 +54,9 @@ print("OUTPUT")
 for label, champ_fn, chal_fn in SCENARIOS:
     p = build(champ_fn, chal_fn)
     for i in range(2000):
-        try:
+        # A failing model is recorded as an error, not a crash.
+        with contextlib.suppress(RuntimeError):
             p.predict("risk", {}, request_key=f"user-{i}")
-        except RuntimeError:
-            pass  # a failing model is recorded as an error, not a crash
 
     champion = p.registry.champion("risk")
     print(f"   scenario {label}")
