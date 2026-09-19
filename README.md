@@ -1,4 +1,4 @@
-<h1 align="center">model-serving-platform</h1>
+<h1 align="center">model-serving-platform (Python · A/B + canary + shadow · SLO monitor)</h1>
 <p align="center"><i>The deployment logic - canaries, SLOs and auto-rollback - built and tested properly</i></p>
 
 <p align="center">
